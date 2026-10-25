@@ -36,10 +36,6 @@ class SetNode:
         # TODO for students (Praktikum 1): ergänzen Sie hier die private Membervariable _praktikumsgruppe
         self._praktikumsgruppe: Optional[int] = None  # Nummer der Praktikumsgruppe, None = noch keiner Gruppe zugeordnet
         # Optional bedeutet. dass da entweder int oder None liegen kann
-        def set_praktikumsgruppe(self, groupnumber: int) -> None:
-            self._praktikumsgruppe = groupnumber
-        def praktikumsgruppe(self) -> Optional[int]:
-            return self._praktikumsgruppe
         # TODO: werden nur für Praktikum 3 benötigt
         self._parent: SetNode = self   # parent Knoten des SetNode Objekts. self bedeutet, dass der Knoten ein Wurzelknoten ist
         self._weight: int = 1      # Gewicht (Anzahl Knoten) des (Teil-)Baumes, der in dem SetNode Objekt verwurzelt ist
@@ -108,15 +104,16 @@ class Praktikumsgruppen(dict):
 
     def create_groups(self, user_ids: List[str], groupnumbers: List[int]) -> None:
         for user_id, groupnumber in zip(user_ids, groupnumbers):
-            self[user_id].set_praktikumsgruppe(groupnumber)
+            self[user_id]._praktikumsgruppe = groupnumber
 
     # *** PUBLIC GET methods ***
 
     def get_groupmembers(self, user_id: str) -> List[str]:
-        group = self[user_id].get_praktikumsgruppe()
+        group = self[user_id]._praktikumsgruppe
+
         members = []
-        for other_id, other_user in self.items(): #items gibt K,V
-            if other_user.praktikumsgruppe() == group:
+        for other_id, other_user in self.items():
+            if other_user._praktikumsgruppe == group:
                 members.append(other_id)
 
         return members
