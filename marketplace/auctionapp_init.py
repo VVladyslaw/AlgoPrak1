@@ -17,6 +17,7 @@ from collections import Counter
 
 import marketplace.auctions
 import sys
+import time
 
 THEME = {
     "bg_app": "#F1F5F9",
@@ -1001,9 +1002,18 @@ class AuctionAppInit:
         """
         search_text = self.search_entry.get()
         if search_text:
-            # TODO for students (Praktikum 1): nutzen Sie hier die Vorschläge des AVL-Baums und vergleichen Sie
-            #  die Laufzeit mit der des Tries
+            # Zeitmessung Trie
+            start = time.perf_counter()
+            suggestions_trie = self.trie.search(search_text)
+            t_trie = time.perf_counter() - start
+
+            # Zeitmessung AVL-Baum
+            start = time.perf_counter()
             suggestions = self.avl_tree.find_most_likely_words(search_text)
+            t_avl = time.perf_counter() - start
+
+            print(f"'{search_text}': Trie {t_trie * 1000:.4f} ms ({len(suggestions_trie)} Wörter) | "
+                  f"AVL {t_avl * 1000:.4f} ms ({len(suggestions)} Wörter)")
             self.show_tooltip(suggestions)
         else:
             self.hide_tooltip()
