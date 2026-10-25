@@ -1,3 +1,7 @@
+"aaaaaa"
+
+
+
 class User:
     def __init__(self, id: int, name: str) -> None:
         self.id = id
