@@ -146,19 +146,18 @@ class Transactions:
     def _hash_fn(self, tx: Transaction) -> int:
         """Hashfunktion zur Bestimmung des Bucket-Index einer Transaktion.
 
-        Args:
-            tx (Transaction): Die Transaktion.
+               Verwendet alle Attribute der Transaktion (Verkäufer, Käufer, Preis,
+               Zeitstempel, Produktname), damit sich die Transaktionen möglichst
+               gleichmäßig auf alle Buckets verteilen.
 
-        Returns:
-            int: Der berechnete Bucket-Index.
+               Args:
+                   tx (Transaction): Die Transaktion.
 
-        Raises:
-            None
-        """
-        # Deliberately bad key function:
-        # Use ONLY the first character of the product name.
-        if not tx.product_name:
-            return 0
-        first = tx.product_name[0].lower()
-        # Map 'a'..'z' to 0..25, everything else also squeezed into the table
-        return (ord(first) - ord('a')) % self._capacity
+               Returns:
+                   int: Der berechnete Bucket-Index im Bereich 0 bis capacity - 1.
+
+               Raises:
+                   None
+               """
+        key = (tx.seller, tx.buyer, tx.price, tx.timestamp, tx.product_name)
+        return hash(key) % self._capacity
