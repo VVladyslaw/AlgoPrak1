@@ -791,6 +791,7 @@ class AuctionAppInit:
 
         if userid not in self._users:
             self._users.add(userid, password)
+            self.rebuild_trie()
             messagebox.showinfo("Erfolg",
                                 f"Registrierung des Nutzers {userid} erfolgreich! Loggen Sie sich bitte ein.")
         else:
@@ -1000,10 +1001,9 @@ class AuctionAppInit:
         """
         search_text = self.search_entry.get()
         if search_text:
-            suggestions = self.trie.search(search_text)
             # TODO for students (Praktikum 1): nutzen Sie hier die Vorschläge des AVL-Baums und vergleichen Sie
             #  die Laufzeit mit der des Tries
-            # avl_suggestions = self.avl_tree.find_most_likely_words(search_text)
+            suggestions = self.avl_tree.find_most_likely_words(search_text)
             self.show_tooltip(suggestions)
         else:
             self.hide_tooltip()
@@ -1259,6 +1259,10 @@ class AuctionAppInit:
         for product_name, count in tuple_list:
             self.trie.insert(product_name)
             self.avl_tree.insert(product_name, count)
+
+        for user_id in self._users.keys():
+            self.trie.insert(user_id)
+            self.avl_tree.insert(user_id, 1)
 
     def rebuild_trie(self) -> None:
         """Baut Trie und AVL-Baum neu auf, damit auch neu erstellte Auktionen vorgeschlagen werden.
