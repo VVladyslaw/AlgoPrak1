@@ -34,7 +34,12 @@ class SetNode:
             None
         """
         # TODO for students (Praktikum 1): ergänzen Sie hier die private Membervariable _praktikumsgruppe
-
+        self._praktikumsgruppe: Optional[int] = None  # Nummer der Praktikumsgruppe, None = noch keiner Gruppe zugeordnet
+        # Optional bedeutet. dass da entweder int oder None liegen kann
+        def set_praktikumsgruppe(self, groupnumber: int) -> None:
+            self._praktikumsgruppe = groupnumber
+        def praktikumsgruppe(self) -> Optional[int]:
+            return self._praktikumsgruppe
         # TODO: werden nur für Praktikum 3 benötigt
         self._parent: SetNode = self   # parent Knoten des SetNode Objekts. self bedeutet, dass der Knoten ein Wurzelknoten ist
         self._weight: int = 1      # Gewicht (Anzahl Knoten) des (Teil-)Baumes, der in dem SetNode Objekt verwurzelt ist
@@ -102,37 +107,19 @@ class Praktikumsgruppen(dict):
         return user_id
 
     def create_groups(self, user_ids: List[str], groupnumbers: List[int]) -> None:
-        """Erstellt Praktikumsgruppen aus Benutzer-IDs und Gruppennummern.
-
-        Args:
-            user_ids (List[str]): Liste von Benutzer-IDs.
-            groupnumbers (List[int]): Zuordnende Gruppennummern.
-
-        Returns:
-            None
-
-        Raises:
-            None
-        """
-        # TODO: implement in Praktikum 1
-        pass
+        for user_id, groupnumber in zip(user_ids, groupnumbers):
+            self[user_id].set_praktikumsgruppe(groupnumber)
 
     # *** PUBLIC GET methods ***
 
     def get_groupmembers(self, user_id: str) -> List[str]:
-        """Gibt eine Liste aller Gruppenmitglieder der Gruppe des Benutzers zurück.
+        group = self[user_id].get_praktikumsgruppe()
+        members = []
+        for other_id, other_user in self.items(): #items gibt K,V
+            if other_user.praktikumsgruppe() == group:
+                members.append(other_id)
 
-        Args:
-            user_id (str): Benutzer-ID.
-
-        Returns:
-            List[str]: Liste von Benutzer-IDs der Gruppenmitglieder.
-
-        Raises:
-            KeyError: Falls `user_id` nicht im Wörterbuch existiert.
-        """
-        # TODO: implement in Praktikum 1
-        pass
+        return members
 
     def print_ds(self) -> None:
         """Gibt die Disjoint-Set-Struktur aus.
