@@ -6,7 +6,7 @@ Implementiert die Simulator-Klasse zur Erzeugung zuf채lliger Hintergrundaktivit�
 
 # Status: Not FINAL, dgaida2, 15.10.2024
 
-from typing import Any
+from typing import Any, Optional
 import threading
 import random
 import time
@@ -102,12 +102,14 @@ class Simulator:
 
         # threading.Timer(30, self.create_random_auctions, args=(auctions, current_user_id)).start()
 
-    def randomly_rate_users(self, users: marketplace.users.Users, current_user_id: str) -> None:
-        """Vergibt zuf채llige Sterne-Bewertungen an Benutzer.
+    def randomly_rate_users(self, users: marketplace.users.Users, current_user_id: str,
+                            heap_users_rated: Optional[Any] = None) -> None:
+        """Vergibt zuf채llige Sterne-Bewertungen an Benutzer und aktualisiert den Max-Heap.
 
         Args:
             users (marketplace.users.Users): Die Users-Instanz.
             current_user_id (str): ID des aktuellen Benutzers.
+            heap_users_rated (Optional[Any]): Max-Heap der Benutzer nach Bewertung.
 
         Returns:
             None
@@ -123,9 +125,11 @@ class Simulator:
         for _ in range(35):
             random_user = random.choice(user_ids)
             stars = random.randint(1, 5)
-            # TODO for students (Praktikum 2): damit Ihre Datenstruktur f체r den am besten bewerteten User aktuell
-            #  bleibt, muss sie nach jeder Bewertung aktualisiert werden. Daf체r d체rfen Sie diese Methode anpassen.
             users[random_user].rate_user(stars)
+
+            # Max-Heap nach jeder Bewertung aktualisieren, damit der Top-User aktuell bleibt
+            if heap_users_rated is not None:
+                heap_users_rated.update_rating(random_user, users[random_user].get_rating_stars_mean())
 
     def stop(self) -> None:
         """Stoppt die Ausf체hrung der Simulation.
