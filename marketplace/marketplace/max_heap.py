@@ -204,3 +204,55 @@ class MaxHeap:
             self._swap(index, largest)
             index = largest
 
+
+
+class UserMaxHeap(MaxHeap):
+    """Max-Heap für Benutzer, sortiert nach der mittleren Sternebewertung.
+
+    Nutzt die Logik von MaxHeap: Statt (bid_count, auction_id) wird (stars_mean, user_id) gespeichert.
+    Der am besten bewertete Benutzer steht immer an der Spitze (Index 0).
+    """
+
+    def add_user(self, user_id: str, stars_mean: float) -> None:
+        """Fügt einen Benutzer mit seiner mittleren Bewertung hinzu.
+
+        Args:
+            user_id (str): Benutzer-ID.
+            stars_mean (float): Mittlere Anzahl Sterne.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: Wenn der Benutzer bereits im Heap existiert.
+        """
+        self.add_auction(user_id, stars_mean)
+
+    def update_rating(self, user_id: str, new_stars_mean: float) -> None:
+        """Aktualisiert die mittlere Bewertung eines Benutzers.
+
+        Args:
+            user_id (str): Benutzer-ID.
+            new_stars_mean (float): Neue mittlere Anzahl Sterne.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: Wenn der Benutzer nicht im Heap existiert.
+        """
+        self.update_bidders(user_id, new_stars_mean)
+
+    def get_top_user(self) -> Optional[Tuple[float, str]]:
+        """Gibt den am besten bewerteten Benutzer in O(1) zurück.
+
+        Args:
+            None
+
+        Returns:
+            Optional[Tuple[float, str]]: (stars_mean, user_id) oder `None`, falls der Heap leer ist.
+
+        Raises:
+            None
+        """
+        return self.get_auction_with_max_bidders()
