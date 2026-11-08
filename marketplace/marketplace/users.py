@@ -19,6 +19,10 @@ import ast
 import csv
 import marketplace.user
 import marketplace.praktikumsgruppen
+import math
+import os
+from collections import deque
+import networkx as nx
 
 
 class Users(marketplace.praktikumsgruppen.Praktikumsgruppen):
@@ -27,6 +31,8 @@ class Users(marketplace.praktikumsgruppen.Praktikumsgruppen):
     Attributes:
         _groupnumbers (List[int]): Liste der Gruppennummern der eingelesenen Benutzer.
     """
+    GRAPH_FILE = "nrw_drive.graphml"
+    ROAD_FILTER = '["highway"~"motorway|trunk|primary|secondary"]'
 
     # *** CONSTRUCTORS ***
     def __init__(self, csvfile: str, *args: Any) -> None:
@@ -40,6 +46,10 @@ class Users(marketplace.praktikumsgruppen.Praktikumsgruppen):
             FileNotFoundError: Falls die CSV-Datei nicht gefunden wurde.
         """
         super().__init__()
+
+        self._map_graph = None  # Straßengraph, wird nur einmal geladen
+        self._osmnx_failed = False  # True, falls osmnx/Download nicht klappt
+        self._distance_cache: Dict[Tuple[str, str], float] = {}
 
         self._read_users_from_csvfile(csvfile)
         self._read_friends_csv('friends.csv')
@@ -78,15 +88,65 @@ class Users(marketplace.praktikumsgruppen.Praktikumsgruppen):
         # TODO for students: calculate distance between gps coordinates of user1 and user2 using a map and an
         #  algorithm that calculates the shortest distance on the map
 
-        user1 = self[user_id1]
-        user2 = self[user_id2]
+        key = (min(user_id1, user_id2), max(user_id1, user_id2))
+        if key in self._distance_cache:
+            return self._distance_cache[key]
 
-        # TODO for students: replace this naive implementation of manhattan distance with distance gotten
-        #  from graph algorithm
-        distance = sum(abs(a - b) for a, b in zip(user1.gps_coords(), user2.gps_coords()))
+        lat1, lon1 = self[user_id1].gps_coords()
+        lat2, lon2 = self[user_id2].gps_coords()
+        if None in (lat1, lon1, lat2, lon2):
+            return float("inf")
+
+        distance = None
+        if not self._osmnx_failed:
+            try:
+                import osmnx as ox
+                graph = self._get_map_graph()
+                origin = ox.distance.nearest_nodes(graph, lon1, lat1)  # X = Längengrad, Y = Breitengrad
+                destination = ox.distance.nearest_nodes(graph, lon2, lat2)
+                path = ox.routing.shortest_path(graph, origin, destination, weight="length")
+                distance = float(nx.path_weight(graph, path, weight="length")) if path else float("inf")
+            except Exception as e:
+                print("osmnx nicht verfügbar, nutze Luftlinie:", e)
+                self._osmnx_failed = True
+        if distance is None:
+            distance = self._beeline_distance(user_id1, user_id2)
+
+        self._distance_cache[key] = distance
+        return distance
         return float(distance)
 
     # *** PUBLIC GET methods ***
+
+    def _get_map_graph(self):
+        """Lädt den Straßengraphen einmal herunter, speichert ihn lokal und lädt ihn danach nur noch aus der Datei."""
+        if self._map_graph is None:
+            import osmnx as ox
+            if os.path.exists(self.GRAPH_FILE):
+                self._map_graph = ox.load_graphml(self.GRAPH_FILE)
+            else:
+                coords = [u.gps_coords() for u in self.values() if None not in u.gps_coords()]
+                lats = [c[0] for c in coords]
+                lons = [c[1] for c in coords]
+                m = 0.1  # Rand in Grad
+                bbox = (min(lons) - m, min(lats) - m, max(lons) + m, max(lats) + m)  # (West, Süd, Ost, Nord)
+                print("Lade Straßengraphen, das kann einige Minuten dauern ...")
+                self._map_graph = ox.graph.graph_from_bbox(bbox, network_type="drive",
+                                                           custom_filter=self.ROAD_FILTER)
+                ox.save_graphml(self._map_graph, self.GRAPH_FILE)
+        return self._map_graph
+
+    def _beeline_distance(self, user_id1: str, user_id2: str) -> float:
+        """Luftlinie in Metern (Haversine-Formel)."""
+        lat1, lon1 = self[user_id1].gps_coords()
+        lat2, lon2 = self[user_id2].gps_coords()
+        if None in (lat1, lon1, lat2, lon2):
+            return float("inf")
+        p1, p2 = math.radians(lat1), math.radians(lat2)
+        dp, dl = p2 - p1, math.radians(lon2 - lon1)
+        a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return 2 * 6371000 * math.asin(math.sqrt(a))
+
 
     def get_name_of_user(self, user_id: str) -> str:
         """Gibt den vollständigen Namen des Benutzers zurück.
@@ -200,7 +260,7 @@ class Users(marketplace.praktikumsgruppen.Praktikumsgruppen):
         return mutual_friends_count
 
     def suggest_friends(self, user_id: str, num_common_friends: int = 2,
-                        distance_threshold: float = 0.1, pretty_print: bool = True) -> List[str]:
+                        distance_threshold: float = 20000, pretty_print: bool = True) -> List[str]:
         """Suggests users to the given user_id that
         (1) are friends with at least num_common_friends friends of user_id or
         (2) that live nearby the given user_id (closer as distance_threshold) and are friends of friends of friends...
@@ -221,7 +281,25 @@ class Users(marketplace.praktikumsgruppen.Praktikumsgruppen):
         mutual_friends_count = self.get_mutual_friends(user_id)
         # TODO for students: Implement this method by filling the list suggested_friends
 
-        suggested_friends = []
+        common_friends = [uid for uid, count in mutual_friends_count.items() if count >= num_common_friends]
+        common_friends.sort(key=lambda uid: mutual_friends_count[uid], reverse=True)
+
+        # (2) Nutzer in der Nähe, die über das Freundesnetzwerk (bis 3. Grades) mit mir verbunden sind
+        my_friends = self[user_id].friends()
+        connected = self._users_within_degree(user_id, 3)
+        nearby: List[Tuple[float, str]] = []
+        for uid in connected:
+            if uid == user_id or uid in my_friends or uid in common_friends:
+                continue
+            # Luftlinie <= Fahrstrecke: wer schon per Luftlinie zu weit weg ist, braucht keine teure osmnx-Berechnung
+            if self._beeline_distance(user_id, uid) >= distance_threshold:
+                continue
+            distance = self.calc_distance_between_users(user_id, uid)
+            if distance < distance_threshold:
+                nearby.append((distance, uid))
+        nearby.sort()  # nächster Nachbar zuerst
+
+        suggested_friends = common_friends + [uid for _, uid in nearby]
 
         if pretty_print:
             suggested_friends = [self[friend].pretty_print() for friend in suggested_friends]
@@ -247,10 +325,26 @@ class Users(marketplace.praktikumsgruppen.Praktikumsgruppen):
 
         # TODO for students: Implement this method
 
-        return False
+        return user_id2 in self._users_within_degree(user_id1, degree)
 
     # *** PUBLIC STATIC methods ***
+    def _users_within_degree(self, user_id: str, degree: int) -> Dict[str, int]:
+        """Breitensuche (BFS): alle Nutzer, die höchstens `degree` Freundschaftskanten entfernt sind.
 
+        Returns:
+            Dict[str, int]: user_id -> Freundschaftsgrad (0 = ich selbst, 1 = Freund, 2 = Freund eines Freundes, ...)
+        """
+        depth = {user_id: 0}
+        queue = deque([user_id])
+        while queue:
+            current = queue.popleft()
+            if depth[current] >= degree:
+                continue
+            for friend in self[current].friends():
+                if friend in self and friend not in depth:
+                    depth[friend] = depth[current] + 1
+                    queue.append(friend)
+        return depth
     # *** PRIVATE methods ***
 
     def _read_users_from_csvfile(self, csvfile: str) -> None:
