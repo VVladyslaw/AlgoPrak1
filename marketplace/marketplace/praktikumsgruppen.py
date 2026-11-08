@@ -9,7 +9,7 @@ Union, Find mit Pfadkomprimierung).
 
 # Definiert die Klassen Praktikumsgruppen und SetNode, implementiert als Menge von disjunkten Mengen (Praktikum 3) oder als Dictionary (Praktikum 1 und 2)
 #
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, Dict
 
 
 class SetNode:
@@ -43,6 +43,14 @@ class SetNode:
         # self._rank = 0
 
     # *** PUBLIC SET methods ***
+    def set_parent(self, parent: "SetNode") -> None:
+        self._parent = parent
+    def set_weight(self, weight: int) -> None:
+        self._weight = weight
+    def parent(self) -> "SetNode":
+        return self._parent
+    def weight(self) -> int:
+        return self._weight
 
     # TODO: implementieren Sie in Praktikum 3 die benötigten Methoden
 
@@ -84,38 +92,54 @@ class Praktikumsgruppen(dict):
 
     # TODO in Praktikum 3: implement find(node), find_byid(user_id, return_id=False) and 
     #  union(user_id1, user_id2)
+    def find(self, node: SetNode) -> SetNode:
+        root = node
+        while root.parent() is not root:
+            root = root.parent()
+        current = node
+        while current is not root:
+            next_node = current.parent()  # запомнить, кто выше
+            current.set_parent(root)  # перевесить прямо на корень
+            current = next_node  # перейти к тому, кто был выше
+        return root
+
 
     def find_byid(self, user_id: str, return_id: bool = False) -> Union[Any, str]:
-        """Findet die Wurzel der Praktikumsgruppe eines Benutzers anhand seiner ID.
+        node = self[user_id]
+        root = self.find(node)
+        if return_id:
+            return root.id()
+        return root
 
-        TODO students: die Methode existiert in der Studierendenversion nur aus Kompatibilitätsgründen und wird im 3. Praktikum implementiert
+    def union(self, user_id1: str, user_id2: str) -> None:
+        root1 = self.find_byid(user_id1)
+        root2 = self.find_byid(user_id2)
+        if root1 is root2:
+            return
+        if root1.weight() < root2.weight():
+            root1.set_parent(root2)
+            root2.set_weight(root1.weight() + root2.weight())
+        else:
+            root2.set_parent(root1)
+            root1.set_weight(root1.weight() + root2.weight())
 
-        Args:
-            user_id (str): Benutzer-ID.
-            return_id (bool): Wenn `True`, wird die Benutzer-ID der Wurzel zurückgegeben.
-
-        Returns:
-            Union[Any, str]: Das Wurzelobjekt oder dessen ID.
-
-        Raises:
-            KeyError: Falls `user_id` nicht im Wörterbuch existiert.
-        """
-        return user_id
 
     def create_groups(self, user_ids: List[str], groupnumbers: List[int]) -> None:
+        first_of_group: Dict[int, str] = {}
         for user_id, groupnumber in zip(user_ids, groupnumbers):
-            self[user_id]._praktikumsgruppe = groupnumber
+            if groupnumber not in first_of_group:
+                first_of_group[groupnumber] = user_id  # erster dieser Gruppe
+            else:
+                self.union(first_of_group[groupnumber], user_id)
 
-    # *** PUBLIC GET methods ***
+                # *** PUBLIC GET methods ***
 
     def get_groupmembers(self, user_id: str) -> List[str]:
-        group = self[user_id]._praktikumsgruppe
-
+        root = self.find(self[user_id])
         members = []
         for other_id, other_user in self.items():
-            if other_user._praktikumsgruppe == group:
+            if self.find(other_user) is root:
                 members.append(other_id)
-
         return members
 
     def print_ds(self) -> None:
